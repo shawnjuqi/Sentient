@@ -35,25 +35,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             button.image?.isTemplate = true
 
             // Add click handler to the menu bar icon
-            button.action = #selector(togglePopover)
+            button.action = #selector(handleButtonClick(_:))
 
             // Set the target of the click handler
             button.target = self
 
-            // Create right-click context menu
-            let menu = NSMenu()
-
-            // Create quit menu item
-            let quitMenuItem = NSMenuItem(
-                title: "Quit Sentient",
-                action: #selector(quitApp),
-                keyEquivalent: "q"
-            )
-            quitMenuItem.target = self
-            menu.addItem(quitMenuItem)
-
-            // Assign menu to status item (right-click will show this)
-            statusItem?.menu = menu
+            // Enable right-click detection
+            button.sendAction(on: [.leftMouseDown, .rightMouseDown])
         }
 
         // Initialize and configure popover
@@ -77,6 +65,45 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Creates an NSView to render the SwiftUI view (bridging) (fixes typing difference)
         popover?.contentViewController = NSHostingController(rootView: contentView)
+    }
+
+    func showContextMenu() {
+        // Create menu
+        let menu = NSMenu()
+        
+        // Add menu item
+        let quitMenuItem = NSMenuItem(
+            title: "Quit Sentient",
+            action: #selector(quitApp),
+            keyEquivalent: "q"
+        )
+        quitMenuItem.target = self
+        menu.addItem(quitMenuItem)
+        
+        // Show menu at icon, centered horizontally below
+        if let button = statusItem?.button {
+            menu.popUp(
+                positioning: nil,
+                at: NSPoint(x: button.bounds.midX, y: button.bounds.minY),
+                in: button
+            )
+        }
+    }
+
+    // Handle both left and right clicks
+    @objc func handleButtonClick(_ sender: NSButton) {
+        // Safely unwrap the current event
+        guard let event = NSApp.currentEvent else {
+            return
+        }
+        
+        // Right-click: show menu
+        if (event.type == .rightMouseDown || event.type == .rightMouseUp) {
+            showContextMenu()
+        } else {
+            // Left-click: toggle popover
+            togglePopover(sender)
+        }
     }
 
     // Called when menu bar icon is clicked

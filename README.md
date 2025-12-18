@@ -2,6 +2,8 @@
 
 A macOS Desktop Overlay app for voice-powered AI assistance using on-device speech recognition and xAI Grok.
 
+<img width="625" height="462" alt="Screenshot 2025-12-17 at 9 45 40 PM" src="https://github.com/user-attachments/assets/706bde0f-603a-4faf-9dc3-889bb9c27b41" />
+
 ## Features
 
 - On-device speech-to-text with WhisperKit

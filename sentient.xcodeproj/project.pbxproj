@@ -275,10 +275,11 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Sentient;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Sentient needs your microphone to record speech.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Sentient uses your microphone to record your voice when you tap Record. Your speech is transcribed using on-device AI, and the text is sent to xAI's Grok API to generate a response. Audio recordings are never stored or transmitted, only the transcribed text is sent.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -306,10 +307,11 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Sentient;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Sentient needs your microphone to record speech.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Sentient uses your microphone to record your voice when you tap Record. Your speech is transcribed using on-device AI, and the text is sent to xAI's Grok API to generate a response. Audio recordings are never stored or transmitted, only the transcribed text is sent.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

@@ -8,8 +8,9 @@ import AppKit
 struct SettingsPageView: View {
     @ObservedObject var viewModel: OverlayViewModel
     
-    /// Persists API key to UserDefaults
-    @AppStorage("xai_api_key") private var apiKey: String = ""
+    /// Holds the API key as local view state.
+    /// Populated from Keychain on appear; written back on every change.
+    @State private var apiKey: String = ""
     
     /// Controls visibility of the API key (local view state, not in ViewModel)
     /// This is fine because it's purely a UI concern with no business logic.
@@ -35,6 +36,28 @@ struct SettingsPageView: View {
             footerView
         }
         .padding(20)
+        .onAppear {
+            // On first launch after this update, migrate any key already in UserDefaults
+            // into the Keychain, then wipe the insecure copy.
+            if let legacy = UserDefaults.standard.string(forKey: "xai_api_key"), !legacy.isEmpty {
+                KeychainHelper.save(legacy, key: "xai_api_key")       // Secure it
+                UserDefaults.standard.removeObject(forKey: "xai_api_key") // Delete plain-text copy
+            }
+            // Load from Keychain into the local @State var so the text field renders it.
+            // Falls back to "" if nothing is stored yet.
+            apiKey = KeychainHelper.load(key: "xai_api_key") ?? ""
+        }
+        .onChange(of: apiKey) { _, newValue in
+            // Called every time the user edits the text field.
+            if newValue.isEmpty {
+                // An empty field means the user cleared their key — remove it entirely
+                // so Keychain doesn't store an empty string that looks like a valid key.
+                KeychainHelper.delete(key: "xai_api_key")
+            } else {
+                // Persist the new value immediately; no Save button needed.
+                KeychainHelper.save(newValue, key: "xai_api_key")
+            }
+        }
     }
     
     // MARK: - Header

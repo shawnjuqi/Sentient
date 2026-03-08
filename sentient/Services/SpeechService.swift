@@ -18,7 +18,7 @@ enum SpeechServiceError: LocalizedError {
     case audioEngineFailure(underlying: Error)
     case transcriptionFailed(underlying: Error)
     case noAudioRecorded
-    
+
     var errorDescription: String? {
         switch self {
         case .modelNotLoaded:
@@ -50,13 +50,17 @@ enum SpeechServiceError: LocalizedError {
 /// because Swift can't verify our manual locking is correct.
 /// We're promising the compiler: "trust me, I handle thread safety manually."
 final class AudioProcessor: @unchecked Sendable {
-    
+
     // MARK: - Private State (All protected by lock)
-    
+
     private var audioBuffer: [Float] = []
     private var converter: AVAudioConverter?
     private let lock = NSLock()
-    
+
+    /// Whether to accumulate incoming audio samples.
+    /// The engine runs continuously; this gates actual recording sessions.
+    private var isCapturing = false
+
     /// Target format: 16kHz mono Float32 (WhisperKit's expected input)
     private let outputFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32,
@@ -64,19 +68,43 @@ final class AudioProcessor: @unchecked Sendable {
         channels: 1,
         interleaved: false
     )!
-    
+
+    // MARK: - Capture Control
+
+    /// Clears the buffer and begins accumulating audio samples.
+    func startCapturing() {
+        lock.lock()
+        defer { lock.unlock() }
+        audioBuffer.removeAll(keepingCapacity: true)
+        converter?.reset()
+        isCapturing = true
+    }
+
+    /// Stops accumulating audio samples. Buffer is preserved for retrieval.
+    func stopCapturing() {
+        lock.lock()
+        defer { lock.unlock() }
+        isCapturing = false
+    }
+
     // MARK: - Public API
-    
+
     /// Processes an audio buffer from the microphone tap.
-    /// Converts to 16kHz and appends to internal buffer.
+    /// Converts to 16kHz and appends to internal buffer — only while capturing.
     ///
     /// **Called from audio thread** - must be thread-safe.
     func process(buffer: AVAudioPCMBuffer) {
+        // Fast-path: skip all work when not recording
+        lock.lock()
+        let capturing = isCapturing
+        lock.unlock()
+        guard capturing else { return }
+
         let inputFormat = buffer.format
-        
+
         // --- LOCK: Access/initialize converter ---
         lock.lock()
-        
+
         // Lazy initialization of converter on first buffer
         if converter == nil {
             converter = AVAudioConverter(from: inputFormat, to: outputFormat)
@@ -86,23 +114,23 @@ final class AudioProcessor: @unchecked Sendable {
                 return
             }
         }
-        
+
         let conv = converter!
         lock.unlock()
         // --- UNLOCK: Conversion is CPU-bound, don't hold lock during it ---
-        
+
         // Calculate output buffer capacity based on sample rate ratio
         let ratio = outputFormat.sampleRate / inputFormat.sampleRate
         let outputCapacity = UInt32(ceil(Double(buffer.frameLength) * ratio))
-        
+
         guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: outputCapacity) else {
             Log.error("Failed to create output buffer", category: "AudioProcessor")
             return
         }
-        
+
         // Track if input has been consumed
         var inputConsumed = false
-        
+
         let inputBlock: AVAudioConverterInputBlock = { _, outStatus in
             if inputConsumed {
                 outStatus.pointee = .noDataNow
@@ -112,45 +140,46 @@ final class AudioProcessor: @unchecked Sendable {
             outStatus.pointee = .haveData
             return buffer
         }
-        
+
         var error: NSError?
         let status = conv.convert(to: outputBuffer, error: &error, withInputFrom: inputBlock)
-        
+
         if status == .error {
             Log.error("Conversion error: \(error?.localizedDescription ?? "unknown")", category: "AudioProcessor")
             return
         }
-        
+
         // Extract samples from converted buffer
         guard let channelData = outputBuffer.floatChannelData?[0] else { return }
         let samples = Array(UnsafeBufferPointer(start: channelData, count: Int(outputBuffer.frameLength)))
-        
+
         // --- LOCK: Append to shared buffer ---
         lock.lock()
         defer { lock.unlock() }
         audioBuffer.append(contentsOf: samples)
     }
-    
+
     /// Returns accumulated audio samples and clears the buffer.
     func retrieveAndClearAudio() -> [Float] {
         lock.lock()
         defer { lock.unlock() }
-        
+
         let data = audioBuffer
         audioBuffer.removeAll(keepingCapacity: true)
         converter?.reset()
-        
+
         return data
     }
-    
+
     /// Clears buffer and resets converter without returning data.
     func clear() {
         lock.lock()
         defer { lock.unlock() }
-        
+
         audioBuffer.removeAll(keepingCapacity: true)
         converter?.reset()
         converter = nil
+        isCapturing = false
     }
 }
 
@@ -172,45 +201,76 @@ final class AudioProcessor: @unchecked Sendable {
 /// ## Why @MainActor?
 /// AVAudioEngine and some WhisperKit operations need to run on the main thread.
 /// Rather than sprinkling DispatchQueue.main everywhere, we isolate the whole class.
+///
+/// ## Engine Lifetime Strategy:
+/// The AVAudioEngine is started once and kept running for the app's lifetime.
+/// Recording sessions are gated by a capture flag in AudioProcessor, not by
+/// stop/start cycles. This avoids HAL I/O thread conflicts (error 35) that occur
+/// when repeatedly tearing down and restarting the audio engine.
 @MainActor
 class SpeechService {
-    
+
     // MARK: - Properties
-    
+
     /// WhisperKit speech recognition pipeline
     private var whisperPipe: WhisperKit?
-    
-    /// Audio engine for capturing microphone input
+
+    /// Audio engine for capturing microphone input — single instance, stays running
     private let audioEngine = AVAudioEngine()
-    
+
     /// Thread-safe audio processor
     private let audioProcessor = AudioProcessor()
-    
+
+    /// Whether the audio engine tap has been installed and the engine is running
+    private var isEngineStarted = false
+
     /// Whether the model has been loaded successfully
     var isModelLoaded: Bool {
         whisperPipe != nil
     }
-    
+
+    // MARK: - Initialization
+
+    init() {
+        // Observe hardware configuration changes (e.g. audio device switch).
+        // When this fires, the existing tap is invalidated and must be reinstalled.
+        NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: audioEngine,
+            queue: nil
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handleEngineConfigChange()
+            }
+        }
+    }
+
     // MARK: - Model Loading
-    
+
     /// Loads the WhisperKit model.
-    /// Call this once at startup. Throws if loading fails.
+    /// Also warms up the audio engine so the HAL I/O thread is settled before
+    /// the user first presses record.
     func loadModel() async throws {
         Log.debug("Loading WhisperKit model...", category: "SpeechService")
         whisperPipe = try await WhisperKit(model: "distil-large-v3")
         Log.debug("WhisperKit model loaded successfully", category: "SpeechService")
+
+        // Best-effort warm-up: start the engine now so the HAL is ready by the
+        // time the user presses record. Failure here is non-fatal — startRecording()
+        // will attempt again.
+        try? startEngineIfNeeded()
     }
-    
+
     // MARK: - Microphone Permission
-    
+
     /// Requests microphone permission asynchronously.
     /// - Parameter completion: Called with the result (granted or denied)
     func requestMicrophonePermission(completion: @escaping (Bool) -> Void) {
         AVCaptureDevice.requestAccess(for: .audio, completionHandler: completion)
     }
-    
+
     // MARK: - Recording
-    
+
     /// Starts recording audio from the microphone.
     /// - Throws: `SpeechServiceError` if permission denied or engine fails
     func startRecording() throws {
@@ -225,27 +285,27 @@ class SpeechService {
         @unknown default:
             throw SpeechServiceError.microphonePermissionDenied
         }
-        
-        // Setup and start the audio engine
-        try setupAndStartEngine()
+
+        // Ensure the engine is running (no-op if already started)
+        try startEngineIfNeeded()
+
+        // Begin accumulating audio in the processor
+        audioProcessor.startCapturing()
     }
-    
-    /// Stops recording and prepares audio for transcription.
+
+    /// Stops recording and preserves audio for transcription.
+    /// The engine stays running to avoid HAL thread conflicts on the next recording.
     func stopRecording() {
-        if audioEngine.isRunning {
-            audioEngine.stop()
-        }
-        audioEngine.inputNode.removeTap(onBus: 0)
-        audioEngine.reset()
+        audioProcessor.stopCapturing()
     }
-    
+
     /// Clears any recorded audio without transcribing.
     func clearAudio() {
         audioProcessor.clear()
     }
-    
+
     // MARK: - Transcription
-    
+
     /// Transcribes the recorded audio and returns the text.
     /// - Returns: The transcribed text
     /// - Throws: `SpeechServiceError` if transcription fails
@@ -253,21 +313,21 @@ class SpeechService {
         guard let pipe = whisperPipe else {
             throw SpeechServiceError.modelNotLoaded
         }
-        
+
         // Retrieve audio from processor
         let audioSamples = audioProcessor.retrieveAndClearAudio()
-        
+
         guard !audioSamples.isEmpty else {
             throw SpeechServiceError.noAudioRecorded
         }
-        
+
         // Debug stats
         let durationSeconds = Double(audioSamples.count) / 16000.0
         Log.debug("Transcribing \(audioSamples.count) samples (\(String(format: "%.1f", durationSeconds))s)", category: "SpeechService")
-        
+
         do {
             let results = try await pipe.transcribe(audioArray: audioSamples)
-            
+
             // results.first is optional (array might be empty)
             // but .text is a non-optional String
             if let result = results.first {
@@ -281,43 +341,55 @@ class SpeechService {
             throw SpeechServiceError.transcriptionFailed(underlying: error)
         }
     }
-    
+
     // MARK: - Private Helpers
-    
-    private func setupAndStartEngine() throws {
-        // Stop engine if already running
-        if audioEngine.isRunning {
-            audioEngine.stop()
-        }
-        
+
+    /// Starts the audio engine and installs the tap, if not already running.
+    /// Safe to call multiple times — subsequent calls are no-ops.
+    private func startEngineIfNeeded() throws {
+        guard !isEngineStarted else { return }
+
         let inputNode = audioEngine.inputNode
-        
-        // Remove existing tap and reset
-        inputNode.removeTap(onBus: 0)
-        audioEngine.reset()
-        
-        // Clear previous audio
-        audioProcessor.clear()
-        
+
         // Get hardware's native format
         let hardwareFormat = inputNode.inputFormat(forBus: 0)
         Log.debug("Hardware format: \(hardwareFormat.sampleRate) Hz, \(hardwareFormat.channelCount) ch", category: "SpeechService")
-        
+
         // Capture local reference to processor to avoid capturing 'self'
         let processor = self.audioProcessor
-        
+
         // Install tap - closure captures only 'processor', not 'self'
         inputNode.installTap(onBus: 0, bufferSize: 4096, format: hardwareFormat) { buffer, _ in
             processor.process(buffer: buffer)
         }
-        
+
         do {
             audioEngine.prepare()
             try audioEngine.start()
+            isEngineStarted = true
         } catch {
             inputNode.removeTap(onBus: 0)
-            audioEngine.reset()
             throw SpeechServiceError.audioEngineFailure(underlying: error)
+        }
+    }
+
+    /// Called when the audio hardware configuration changes (e.g. device switch or
+    /// bluetooth audio devices transitioning from A2DP to HFP when the mic activates).
+    /// Must fully stop the engine before reinstalling the tap, otherwise the old
+    /// HAL I/O thread remains and the next start fails with error 35.
+    private func handleEngineConfigChange() {
+        Log.debug("Audio engine configuration changed, reinstalling tap...", category: "SpeechService")
+        audioEngine.inputNode.removeTap(onBus: 0)
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        audioEngine.reset()
+        isEngineStarted = false
+        // Yield 100ms for the HAL to fully destroy its I/O thread before restarting.
+        // Without this, the next start races with thread cleanup and logs a warning.
+        Task {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            try? startEngineIfNeeded()
         }
     }
 }

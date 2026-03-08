@@ -10,15 +10,14 @@ actor GrokService {
     /// xAI API endpoint for chat completions
     private let apiURL = URL(string: "https://api.x.ai/v1/chat/completions")!
     
-    /// Reads API key from UserDefaults (set via Settings).
-    /// Falls back to environment variable for development.
+    /// Reads API key from the Keychain (written by SettingsPageView).
+    /// Falls back to an environment variable so development runs work without a saved key.
     private var apiKey: String {
-        // First check UserDefaults (user-configured)
-        if let storedKey = UserDefaults.standard.string(forKey: "xai_api_key"), !storedKey.isEmpty {
-            return storedKey
-        }
-        // Fall back to environment variable (for development)
-        return ProcessInfo.processInfo.environment["XAI_API_KEY"] ?? ""
+        // KeychainHelper.load returns nil if nothing is stored yet.
+        // The `??` chain falls through to the env var, then finally to "".
+        KeychainHelper.load(key: "xai_api_key")
+            ?? ProcessInfo.processInfo.environment["XAI_API_KEY"]
+            ?? ""
     }
     
     /// Check if API key is configured

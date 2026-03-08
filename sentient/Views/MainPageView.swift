@@ -8,18 +8,18 @@ struct MainPageView: View {
     @ObservedObject var viewModel: OverlayViewModel
     
     /// Check if API key is configured (view-level concern for display)
-    @AppStorage("xai_api_key") private var apiKey: String = ""
-    
+    @State private var hasAPIKey: Bool = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Header with settings button
             headerView
-            
+
             Divider()
                 .background(Color.white.opacity(0.2))
-            
+
             // API key warning if not configured
-            if apiKey.isEmpty {
+            if !hasAPIKey {
                 apiKeyWarning
             }
             
@@ -38,8 +38,11 @@ struct MainPageView: View {
             controlsSection
         }
         .padding(20)
+        .onAppear {
+            hasAPIKey = KeychainHelper.load(key: "xai_api_key") != nil
+        }
     }
-    
+
     // MARK: - Header
     
     private var headerView: some View {

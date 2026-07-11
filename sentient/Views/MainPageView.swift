@@ -186,7 +186,7 @@ struct MainPageView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
             
-            Text(viewModel.transcript.isEmpty ? "Press the button or Option+Space to speak..." : viewModel.transcript)
+            Text(viewModel.transcript.isEmpty ? "Press Record or Option+R to speak..." : viewModel.transcript)
                 .font(.body)
                 .foregroundColor(viewModel.transcript.isEmpty ? .secondary : .primary)
                 .frame(maxWidth: .infinity, alignment: .leading)

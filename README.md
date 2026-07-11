@@ -11,6 +11,8 @@ Notice: This app is no longer available on the App Store. The final stats are be
 <img width="1007" height="386" alt="Screenshot 2026-06-02 at 5 05 42 PM" src="https://github.com/user-attachments/assets/2f39e252-32e5-46a9-9de3-732b614c2113" />
 <img width="984" height="384" alt="Screenshot 2026-06-02 at 5 38 42 PM" src="https://github.com/user-attachments/assets/46aac6b7-ba9b-47b0-ab7c-6711d8c196f3" />
 
+Archived. Final security/privacy pass (Keychain, mic lifetime, confirm-before-send, TLS pin, privacy manifest) done with Cursor before archive.
+
 ## Features
 
 - On-device speech-to-text with WhisperKit

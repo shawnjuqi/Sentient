@@ -30,12 +30,17 @@ final class OverlayPanel: NSPanel {
         // .floating: Window stays above normal windows from all apps
         level = .floating
         
-        // .canJoinAllSpaces: Panel appears on every virtual desktop/Space
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        // Stay on the active Space only — avoid mirroring sensitive transcripts
+        // onto every virtual desktop. fullScreenAuxiliary keeps Spotlight-like behavior.
+        collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        
+        // Exclude overlay contents from screenshots and screen sharing when possible.
+        sharingType = .none
         
         // MARK: - Focus & Interaction
         
-        // hidesOnDeactivate = false: Don't auto-hide when another app activates
+        // Keep visible while using other apps (Spotlight-style); Space isolation
+        // and sharingType handle the main shoulder-surf / capture risks.
         hidesOnDeactivate = false
         
         // MARK: - Visual Polish

@@ -8,51 +8,47 @@ import AppKit
 struct SettingsPageView: View {
     @ObservedObject var viewModel: OverlayViewModel
     
-    /// Holds the API key as local view state.
-    /// Populated from Keychain on appear; written back on every change.
+    /// Draft API key edited in the text field. Persisted only via Save / Clear.
     @State private var apiKey: String = ""
     
-    /// Controls visibility of the API key (local view state, not in ViewModel)
-    /// This is fine because it's purely a UI concern with no business logic.
+    /// Last value known to be stored in Keychain (drives the configured badge).
+    @State private var storedAPIKey: String = ""
+    
     @State private var showAPIKey: Bool = false
+    @State private var saveMessage: String?
+    @State private var saveFailed: Bool = false
+    
+    private var hasUnsavedChanges: Bool {
+        apiKey != storedAPIKey
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Header with back button
             headerView
             
             Divider()
                 .background(Color.white.opacity(0.2))
             
-            // API Key section
             apiKeySection
             
-            // Keyboard shortcuts info
             shortcutsSection
             
             Spacer()
             
-            // Footer
             footerView
         }
         .padding(20)
         .onAppear {
-            // Migrate any legacy UserDefaults key into Keychain — only wipe the
-            // plain-text copy after a verified Keychain write succeeds.
             if let legacy = UserDefaults.standard.string(forKey: "xai_api_key"), !legacy.isEmpty {
                 if KeychainHelper.save(legacy, key: "xai_api_key") {
                     UserDefaults.standard.removeObject(forKey: "xai_api_key")
                 }
             }
-            apiKey = KeychainHelper.load(key: "xai_api_key") ?? ""
-        }
-        .onChange(of: apiKey) { _, newValue in
-            // Called every time the user edits the text field.
-            if newValue.isEmpty {
-                KeychainHelper.delete(key: "xai_api_key")
-            } else {
-                KeychainHelper.save(newValue, key: "xai_api_key")
-            }
+            let loaded = KeychainHelper.load(key: "xai_api_key") ?? ""
+            apiKey = loaded
+            storedAPIKey = loaded
+            saveMessage = nil
+            saveFailed = false
         }
     }
     
@@ -77,7 +73,6 @@ struct SettingsPageView: View {
             
             Spacer()
             
-            // Invisible spacer for centering
             HStack(spacing: 4) {
                 Image(systemName: "chevron.left")
                 Text("Back")
@@ -103,6 +98,7 @@ struct SettingsPageView: View {
                     }
                 }
                 .textFieldStyle(.roundedBorder)
+                .onSubmit { saveAPIKey() }
                 
                 Button(action: { showAPIKey.toggle() }) {
                     Image(systemName: showAPIKey ? "eye.slash" : "eye")
@@ -113,20 +109,35 @@ struct SettingsPageView: View {
             }
             
             HStack {
-                if !apiKey.isEmpty {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                    Text("API key configured")
+                Button("Save") { saveAPIKey() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(!hasUnsavedChanges)
+                
+                if !storedAPIKey.isEmpty {
+                    Button("Clear") { clearAPIKey() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+                
+                Spacer()
+                
+                if let saveMessage {
+                    Text(saveMessage)
+                        .font(.caption)
+                        .foregroundColor(saveFailed ? .red : .secondary)
+                } else if !storedAPIKey.isEmpty {
+                    Label("API key configured", systemImage: "checkmark.circle.fill")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 } else {
-                    Image(systemName: "info.circle")
-                        .foregroundColor(.secondary)
-                    Text("Get your key from")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Link("console.x.ai", destination: URL(string: "https://console.x.ai")!)
-                        .font(.caption)
+                    HStack(spacing: 4) {
+                        Text("Get your key from")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Link("console.x.ai", destination: URL(string: "https://console.x.ai")!)
+                            .font(.caption)
+                    }
                 }
             }
         }
@@ -135,6 +146,37 @@ struct SettingsPageView: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(Color.primary.opacity(0.05))
         )
+    }
+    
+    private func saveAPIKey() {
+        let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        apiKey = trimmed
+        
+        if trimmed.isEmpty {
+            clearAPIKey()
+            return
+        }
+        
+        if KeychainHelper.save(trimmed, key: "xai_api_key") {
+            storedAPIKey = trimmed
+            saveFailed = false
+            saveMessage = "Saved to Keychain"
+        } else {
+            saveFailed = true
+            saveMessage = "Could not save to Keychain"
+        }
+    }
+    
+    private func clearAPIKey() {
+        if KeychainHelper.delete(key: "xai_api_key") {
+            apiKey = ""
+            storedAPIKey = ""
+            saveFailed = false
+            saveMessage = "API key removed"
+        } else {
+            saveFailed = true
+            saveMessage = "Could not remove Keychain item"
+        }
     }
     
     // MARK: - Shortcuts Section
@@ -146,7 +188,6 @@ struct SettingsPageView: View {
                 .fontWeight(.medium)
             
             VStack(spacing: 10) {
-                // Toggle Overlay shortcut
                 HStack {
                     Text("Toggle Overlay")
                         .font(.caption)
@@ -158,7 +199,6 @@ struct SettingsPageView: View {
                         .controlSize(.small)
                 }
                 
-                // Toggle Recording shortcut
                 HStack {
                     Text("Start/Stop Recording")
                         .font(.caption)

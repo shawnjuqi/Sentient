@@ -12,29 +12,27 @@ struct MainPageView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Header with settings button
             headerView
 
             Divider()
                 .background(Color.white.opacity(0.2))
 
-            // API key warning if not configured
             if !hasAPIKey {
                 apiKeyWarning
             }
             
-            // Error message if present
             if let error = viewModel.errorMessage {
                 errorBanner(message: error)
             }
             
-            // Transcribed text section
             transcriptSection
             
-            // AI response section
+            if viewModel.hasPendingSend {
+                pendingSendBanner
+            }
+            
             responseSection
             
-            // Recording controls
             controlsSection
         }
         .padding(20)
@@ -57,10 +55,8 @@ struct MainPageView: View {
             
             Spacer()
             
-            // Status indicator
             statusBadge
             
-            // Settings button - calls ViewModel method
             Button(action: { viewModel.showSettings() }) {
                 Image(systemName: "gearshape.fill")
                     .font(.title3)
@@ -89,7 +85,6 @@ struct MainPageView: View {
         )
     }
     
-    /// Computed property for status color based on ViewModel state
     private var statusColor: Color {
         if viewModel.isModelLoading {
             return .orange
@@ -97,12 +92,13 @@ struct MainPageView: View {
             return .red
         } else if viewModel.isProcessingAI {
             return .blue
+        } else if viewModel.hasPendingSend {
+            return .orange
         } else {
             return .green
         }
     }
     
-    /// Computed property for status text based on ViewModel state
     private var statusText: String {
         if viewModel.isModelLoading {
             return "Loading Model..."
@@ -110,6 +106,8 @@ struct MainPageView: View {
             return "Listening..."
         } else if viewModel.isProcessingAI {
             return "Thinking..."
+        } else if viewModel.hasPendingSend {
+            return "Ready to Send"
         } else {
             return "Ready"
         }
@@ -150,18 +148,14 @@ struct MainPageView: View {
             
             Spacer()
             
-            // Show "Open Settings" button for microphone permission errors
             if viewModel.microphonePermissionDenied {
                 Button("Open Settings") {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
-                        NSWorkspace.shared.open(url)
-                    }
+                    openMicrophonePrivacySettings()
                 }
                 .font(.caption)
                 .buttonStyle(.borderless)
             }
             
-            // Dismiss button - calls ViewModel method
             Button {
                 viewModel.clearError()
             } label: {
@@ -176,6 +170,12 @@ struct MainPageView: View {
             RoundedRectangle(cornerRadius: 8)
                 .fill(Color.red.opacity(0.15))
         )
+    }
+    
+    private func openMicrophonePrivacySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+            NSWorkspace.shared.open(url)
+        }
     }
     
     // MARK: - Transcript Section
@@ -198,9 +198,37 @@ struct MainPageView: View {
         }
     }
     
+    // MARK: - Pending Send
+    
+    private var pendingSendBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.up.circle.fill")
+                .foregroundColor(.accentColor)
+            Text("Send this transcript to xAI Grok?")
+                .font(.caption)
+            Spacer()
+            Button("Discard") {
+                viewModel.discardPendingSend()
+            }
+            .font(.caption)
+            .buttonStyle(.borderless)
+            Button("Send") {
+                viewModel.sendPendingToGrok()
+            }
+            .font(.caption)
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.accentColor.opacity(0.12))
+        )
+    }
+    
     // MARK: - Response Section
     
-    /// Calculate response box height based on content
     private var responseBoxHeight: CGFloat {
         let minHeight: CGFloat = 36
         let maxHeight: CGFloat = 280
@@ -243,7 +271,6 @@ struct MainPageView: View {
     
     private var controlsSection: some View {
         HStack {
-            // Record button - calls ViewModel method
             Button(action: {
                 viewModel.toggleRecording()
             }) {
@@ -257,9 +284,8 @@ struct MainPageView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(viewModel.isRecording ? .red : .accentColor)
-            .disabled(viewModel.isModelLoading)
+            .disabled(viewModel.isModelLoading || viewModel.isProcessingAI)
             
-            // Clear button - calls ViewModel method
             Button(action: {
                 viewModel.clearAll()
             }) {
@@ -269,7 +295,7 @@ struct MainPageView: View {
                     .padding(.horizontal, 16)
             }
             .buttonStyle(.bordered)
-            .disabled(viewModel.transcript.isEmpty && viewModel.aiResponse.isEmpty)
+            .disabled(viewModel.transcript.isEmpty && viewModel.aiResponse.isEmpty && !viewModel.hasPendingSend)
         }
     }
 }

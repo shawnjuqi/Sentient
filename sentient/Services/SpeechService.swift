@@ -61,6 +61,13 @@ final class AudioProcessor: @unchecked Sendable {
     /// The engine runs continuously; this gates actual recording sessions.
     private var isCapturing = false
 
+    /// Thread-safe read of whether samples are currently being accumulated.
+    var isActivelyCapturing: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return isCapturing
+    }
+
     /// Target format: 16kHz mono Float32 (WhisperKit's expected input)
     private let outputFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32,
@@ -248,17 +255,12 @@ class SpeechService {
     // MARK: - Model Loading
 
     /// Loads the WhisperKit model.
-    /// Also warms up the audio engine so the HAL I/O thread is settled before
-    /// the user first presses record.
+    /// Audio engine is started on demand when recording begins so the mic
+    /// is not held open for the entire app lifetime.
     func loadModel() async throws {
         Log.debug("Loading WhisperKit model...", category: "SpeechService")
         whisperPipe = try await WhisperKit(model: "distil-large-v3")
         Log.debug("WhisperKit model loaded successfully", category: "SpeechService")
-
-        // Best-effort warm-up: start the engine now so the HAL is ready by the
-        // time the user presses record. Failure here is non-fatal — startRecording()
-        // will attempt again.
-        try? startEngineIfNeeded()
     }
 
     // MARK: - Microphone Permission
@@ -294,14 +296,16 @@ class SpeechService {
     }
 
     /// Stops recording and preserves audio for transcription.
-    /// The engine stays running to avoid HAL thread conflicts on the next recording.
+    /// Tears down the audio engine so the microphone is released when idle.
     func stopRecording() {
         audioProcessor.stopCapturing()
+        stopEngineIfNeeded()
     }
 
-    /// Clears any recorded audio without transcribing.
+    /// Clears any recorded audio without transcribing and releases the mic.
     func clearAudio() {
         audioProcessor.clear()
+        stopEngineIfNeeded()
     }
 
     // MARK: - Transcription
@@ -373,23 +377,31 @@ class SpeechService {
         }
     }
 
-    /// Called when the audio hardware configuration changes (e.g. device switch or
-    /// bluetooth audio devices transitioning from A2DP to HFP when the mic activates).
-    /// Must fully stop the engine before reinstalling the tap, otherwise the old
-    /// HAL I/O thread remains and the next start fails with error 35.
-    private func handleEngineConfigChange() {
-        Log.debug("Audio engine configuration changed, reinstalling tap...", category: "SpeechService")
+    /// Stops the audio engine and removes the input tap, releasing the microphone.
+    private func stopEngineIfNeeded() {
+        guard isEngineStarted else { return }
+
         audioEngine.inputNode.removeTap(onBus: 0)
         if audioEngine.isRunning {
             audioEngine.stop()
         }
         audioEngine.reset()
         isEngineStarted = false
-        // Yield 100ms for the HAL to fully destroy its I/O thread before restarting.
-        // Without this, the next start races with thread cleanup and logs a warning.
+    }
+
+    /// Called when the audio hardware configuration changes (e.g. device switch or
+    /// bluetooth audio devices transitioning from A2DP to HFP when the mic activates).
+    /// Must fully stop the engine before reinstalling the tap, otherwise the old
+    /// HAL I/O thread remains and the next start fails with error 35.
+    private func handleEngineConfigChange() {
+        Log.debug("Audio engine configuration changed, reinstalling tap...", category: "SpeechService")
+        stopEngineIfNeeded()
+        // Only restart if we were actively capturing; otherwise stay idle.
+        guard audioProcessor.isActivelyCapturing else { return }
         Task {
             try? await Task.sleep(nanoseconds: 100_000_000)
             try? startEngineIfNeeded()
+            audioProcessor.startCapturing()
         }
     }
 }

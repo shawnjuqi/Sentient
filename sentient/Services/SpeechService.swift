@@ -100,33 +100,26 @@ final class AudioProcessor: @unchecked Sendable {
     /// Converts to 16kHz and appends to internal buffer — only while capturing.
     ///
     /// **Called from audio thread** - must be thread-safe.
+    /// Holds the lock for the full conversion so `clear`/`startCapturing` cannot
+    /// reset the converter mid-convert.
     func process(buffer: AVAudioPCMBuffer) {
-        // Fast-path: skip all work when not recording
         lock.lock()
-        let capturing = isCapturing
-        lock.unlock()
-        guard capturing else { return }
+        defer { lock.unlock() }
+
+        guard isCapturing else { return }
 
         let inputFormat = buffer.format
 
-        // --- LOCK: Access/initialize converter ---
-        lock.lock()
-
-        // Lazy initialization of converter on first buffer
         if converter == nil {
             converter = AVAudioConverter(from: inputFormat, to: outputFormat)
             if converter == nil {
                 Log.error("Failed to create audio converter", category: "AudioProcessor")
-                lock.unlock()
                 return
             }
         }
 
         let conv = converter!
-        lock.unlock()
-        // --- UNLOCK: Conversion is CPU-bound, don't hold lock during it ---
 
-        // Calculate output buffer capacity based on sample rate ratio
         let ratio = outputFormat.sampleRate / inputFormat.sampleRate
         let outputCapacity = UInt32(ceil(Double(buffer.frameLength) * ratio))
 
@@ -135,7 +128,6 @@ final class AudioProcessor: @unchecked Sendable {
             return
         }
 
-        // Track if input has been consumed
         var inputConsumed = false
 
         let inputBlock: AVAudioConverterInputBlock = { _, outStatus in
@@ -156,13 +148,8 @@ final class AudioProcessor: @unchecked Sendable {
             return
         }
 
-        // Extract samples from converted buffer
         guard let channelData = outputBuffer.floatChannelData?[0] else { return }
         let samples = Array(UnsafeBufferPointer(start: channelData, count: Int(outputBuffer.frameLength)))
-
-        // --- LOCK: Append to shared buffer ---
-        lock.lock()
-        defer { lock.unlock() }
         audioBuffer.append(contentsOf: samples)
     }
 

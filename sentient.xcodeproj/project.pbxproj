@@ -13,12 +13,18 @@
 
 /* Begin PBXFileReference section */
 		C80CED002EE76F98000DB377 /* sentient.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = sentient.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000012EE76F99000DB377 /* sentientTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = sentientTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		C80CED022EE76F98000DB377 /* sentient */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = sentient;
+			sourceTree = "<group>";
+		};
+		A10000022EE76F99000DB377 /* sentientTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = sentientTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -33,6 +39,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A10000032EE76F99000DB377 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -40,6 +53,7 @@
 			isa = PBXGroup;
 			children = (
 				C80CED022EE76F98000DB377 /* sentient */,
+				A10000022EE76F99000DB377 /* sentientTests */,
 				C80CED012EE76F98000DB377 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -48,6 +62,7 @@
 			isa = PBXGroup;
 			children = (
 				C80CED002EE76F98000DB377 /* sentient.app */,
+				A10000012EE76F99000DB377 /* sentientTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -79,7 +94,48 @@
 			productReference = C80CED002EE76F98000DB377 /* sentient.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A10000062EE76F99000DB377 /* sentientTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A100000B2EE76F99000DB377 /* Build configuration list for PBXNativeTarget "sentientTests" */;
+			buildPhases = (
+				A10000042EE76F99000DB377 /* Sources */,
+				A10000032EE76F99000DB377 /* Frameworks */,
+				A10000052EE76F99000DB377 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A10000072EE76F99000DB377 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A10000022EE76F99000DB377 /* sentientTests */,
+			);
+			name = sentientTests;
+			packageProductDependencies = (
+			);
+			productName = sentientTests;
+			productReference = A10000012EE76F99000DB377 /* sentientTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
+
+/* Begin PBXContainerItemProxy section */
+		A10000082EE76F99000DB377 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C80CECF82EE76F98000DB377 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C80CECFF2EE76F98000DB377;
+			remoteInfo = sentient;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		A10000072EE76F99000DB377 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C80CECFF2EE76F98000DB377 /* sentient */;
+			targetProxy = A10000082EE76F99000DB377 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXProject section */
 		C80CECF82EE76F98000DB377 /* Project object */ = {
@@ -91,6 +147,10 @@
 				TargetAttributes = {
 					C80CECFF2EE76F98000DB377 = {
 						CreatedOnToolsVersion = 16.4;
+					};
+					A10000062EE76F99000DB377 = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = C80CECFF2EE76F98000DB377;
 					};
 				};
 			};
@@ -113,6 +173,7 @@
 			projectRoot = "";
 			targets = (
 				C80CECFF2EE76F98000DB377 /* sentient */,
+				A10000062EE76F99000DB377 /* sentientTests */,
 			);
 		};
 /* End PBXProject section */
@@ -125,10 +186,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A10000052EE76F99000DB377 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		C80CECFC2EE76F98000DB377 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000042EE76F99000DB377 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -340,6 +415,43 @@
 			};
 			name = Release;
 		};
+
+		A10000092EE76F99000DB377 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 386DZ89CD4;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = Oriented.sentientTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/sentient.app/Contents/MacOS/sentient";
+			};
+			name = Debug;
+		};
+		A100000A2EE76F99000DB377 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 386DZ89CD4;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = Oriented.sentientTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/sentient.app/Contents/MacOS/sentient";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -357,6 +469,15 @@
 			buildConfigurations = (
 				C80CED122EE76F99000DB377 /* Debug */,
 				C80CED132EE76F99000DB377 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A100000B2EE76F99000DB377 /* Build configuration list for PBXNativeTarget "sentientTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A10000092EE76F99000DB377 /* Debug */,
+				A100000A2EE76F99000DB377 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

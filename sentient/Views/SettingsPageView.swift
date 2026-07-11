@@ -37,24 +37,20 @@ struct SettingsPageView: View {
         }
         .padding(20)
         .onAppear {
-            // On first launch after this update, migrate any key already in UserDefaults
-            // into the Keychain, then wipe the insecure copy.
+            // Migrate any legacy UserDefaults key into Keychain — only wipe the
+            // plain-text copy after a verified Keychain write succeeds.
             if let legacy = UserDefaults.standard.string(forKey: "xai_api_key"), !legacy.isEmpty {
-                KeychainHelper.save(legacy, key: "xai_api_key")       // Secure it
-                UserDefaults.standard.removeObject(forKey: "xai_api_key") // Delete plain-text copy
+                if KeychainHelper.save(legacy, key: "xai_api_key") {
+                    UserDefaults.standard.removeObject(forKey: "xai_api_key")
+                }
             }
-            // Load from Keychain into the local @State var so the text field renders it.
-            // Falls back to "" if nothing is stored yet.
             apiKey = KeychainHelper.load(key: "xai_api_key") ?? ""
         }
         .onChange(of: apiKey) { _, newValue in
             // Called every time the user edits the text field.
             if newValue.isEmpty {
-                // An empty field means the user cleared their key — remove it entirely
-                // so Keychain doesn't store an empty string that looks like a valid key.
                 KeychainHelper.delete(key: "xai_api_key")
             } else {
-                // Persist the new value immediately; no Save button needed.
                 KeychainHelper.save(newValue, key: "xai_api_key")
             }
         }

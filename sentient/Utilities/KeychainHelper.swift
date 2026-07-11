@@ -31,6 +31,9 @@ enum KeychainHelper {
             kSecClass:       kSecClassGenericPassword,
             kSecAttrService: service,
             kSecAttrAccount: key,
+            // Restrict to this device while unlocked — avoids syncing the API key
+            // via Keychain backup/restore more broadly than necessary.
+            kSecAttrAccessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
             kSecValueData:   data
         ]
         let status = SecItemAdd(addQuery as CFDictionary, nil)

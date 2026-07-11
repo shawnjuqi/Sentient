@@ -8,6 +8,9 @@ actor GrokService {
     
     private let apiURL = URL(string: "https://api.x.ai/v1/chat/completions")!
     
+    /// Dedicated session with TLS 1.2+ and SPKI pinning for api.x.ai.
+    private let urlSession: URLSession = GrokURLSessionFactory.makeSession()
+    
     private var apiKey: String {
         KeychainHelper.load(key: "xai_api_key")
             ?? ProcessInfo.processInfo.environment["XAI_API_KEY"]
@@ -80,7 +83,7 @@ actor GrokService {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        let (bytes, response) = try await urlSession.bytes(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw GrokError.invalidResponse

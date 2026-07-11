@@ -368,8 +368,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/argmaxinc/whisperkit";
 			requirement = {
-				branch = main;
-				kind = branch;
+				kind = exactVersion;
+				version = 0.9.4;
 			};
 		};
 		C86F4FEA2EEDA926008385FF /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {

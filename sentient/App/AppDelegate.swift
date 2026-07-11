@@ -136,15 +136,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.toggleOverlay()
         }
         
-        // Toggle recording (must dispatch to MainActor for ViewModel)
+        // Toggle recording — always surface the overlay first so the user can
+        // see listening state and cancel. Never record while the panel is hidden.
         KeyboardShortcuts.onKeyUp(for: .toggleRecording) { [weak self] in
             Task { @MainActor in
-                self?.viewModel?.toggleRecording()
+                guard let self else { return }
+                self.showOverlayIfNeeded()
+                self.viewModel?.toggleRecording()
             }
         }
     }
     
     // MARK: - Actions
+    
+    /// Ensures the overlay is visible before sensitive actions (e.g. recording).
+    private func showOverlayIfNeeded() {
+        guard let panel = overlayPanel, !panel.isVisible else { return }
+        recenterPanel()
+        NSApp.activate(ignoringOtherApps: true)
+        panel.alphaValue = 0
+        panel.makeKeyAndOrderFront(nil)
+        panel.animator().alphaValue = 1
+    }
     
     @objc private func toggleOverlay() {
         guard let panel = overlayPanel else { return }
@@ -157,16 +170,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 panel.alphaValue = 1 // Reset for next show
             }
         } else {
-            // Recenter panel on current screen
-            recenterPanel()
-            
-            // Activate app FIRST to ensure window operations succeed
-            NSApp.activate(ignoringOtherApps: true)
-            
-            // Show with animation
-            panel.alphaValue = 0
-            panel.makeKeyAndOrderFront(nil)
-            panel.animator().alphaValue = 1
+            showOverlayIfNeeded()
         }
     }
     
